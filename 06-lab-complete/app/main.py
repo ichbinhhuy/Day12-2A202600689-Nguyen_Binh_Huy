@@ -215,12 +215,12 @@ async def ask_agent(
 
     **Authentication:** Include header `X-API-Key: <your-key>`
     """
-    # Rate limit per API key
-    check_rate_limit(_key[:8])  # use first 8 chars as key bucket
+    # Rate limit per user (scoped to API key)
+    check_rate_limit(f"{_key[:8]}:{body.user_id}")
 
     # Budget check
     input_tokens = len(body.question.split()) * 2
-    check_and_record_cost(_key[:8], input_tokens, 0)
+    check_and_record_cost(f"{_key[:8]}:{body.user_id}", input_tokens, 0)
 
     logger.info(json.dumps({
         "event": "agent_call",
@@ -241,7 +241,7 @@ async def ask_agent(
     r.expire(history_key, 3600)  # Expire after 1 hour
 
     output_tokens = len(answer.split()) * 2
-    check_and_record_cost(_key[:8], 0, output_tokens)
+    check_and_record_cost(f"{_key[:8]}:{body.user_id}", 0, output_tokens)
 
     return AskResponse(
         question=body.question,
