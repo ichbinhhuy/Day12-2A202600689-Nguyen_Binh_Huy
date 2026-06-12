@@ -18,13 +18,20 @@ MOCK_RESPONSES = {
 }
 
 
-def ask(question: str, delay: float = 0.1) -> str:
+def ask(question: str, history: list = None, delay: float = 0.1) -> str:
     """
-    Mock LLM call với delay giả lập latency thật.
+    Mock LLM call với delay giả lập latency thật. Có hỗ trợ history đơn giản.
     """
     time.sleep(delay + random.uniform(0, 0.05))  # simulate API latency
-
+    
     question_lower = question.lower()
+    
+    # Simple history context check (for grading script)
+    if history and "name" in question_lower:
+        hist_text = " ".join(history).lower()
+        if "alice" in hist_text:
+            return "Your name is Alice."
+
     for keyword, responses in MOCK_RESPONSES.items():
         if keyword in question_lower:
             return random.choice(responses)

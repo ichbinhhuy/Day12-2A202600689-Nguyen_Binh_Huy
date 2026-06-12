@@ -176,6 +176,7 @@ async def request_middleware(request: Request, call_next):
 # Models
 # ─────────────────────────────────────────────────────────
 class AskRequest(BaseModel):
+    user_id: str = Field("default", description="User ID for conversation history")
     question: str = Field(..., min_length=1, max_length=2000,
                           description="Your question for the agent")
 
@@ -225,9 +226,19 @@ async def ask_agent(
         "event": "agent_call",
         "q_len": len(body.question),
         "client": str(request.client.host) if request.client else "unknown",
+        "user_id": body.user_id,
     }))
 
-    answer = llm_ask(body.question)
+    # Retrieve history
+    history_key = f"chat:{body.user_id}"
+    history_bytes = r.lrange(history_key, 0, -1)
+    history_str = [msg.decode('utf-8') for msg in history_bytes]
+
+    answer = llm_ask(body.question, history=history_str)
+
+    # Save to history
+    r.rpush(history_key, f"User: {body.question}", f"Agent: {answer}")
+    r.expire(history_key, 3600)  # Expire after 1 hour
 
     output_tokens = len(answer.split()) * 2
     check_and_record_cost(_key[:8], 0, output_tokens)

@@ -32,6 +32,15 @@
 - Môi trường Production (Multi-stage, python:3.11-slim): ~150 MB
 - Mức độ thay đổi (Difference): Dung lượng giảm khoảng 85%. Phương pháp Multi-stage giúp loại bỏ các công cụ hỗ trợ xây dựng (build tools) và chỉ giữ lại tệp tin cần thiết cho môi trường thực thi (runtime).
 
+### Exercise 2.4: Architecture diagram
+Mô hình triển khai hệ thống như sau:
+```
+Client → Nginx (port 80) → Agent (port 8000) → Redis (port 6379)
+```
+- **Nginx:** Đóng vai trò là Reverse Proxy và Load Balancer, tiếp nhận các yêu cầu từ Client.
+- **Agent:** Ứng dụng chính (FastAPI), nhận và xử lý yêu cầu.
+- **Redis:** Lưu trữ trạng thái (State), bao gồm giới hạn tần suất (Rate Limiter) và ngân sách (Cost Guard).
+
 ## Part 3: Cloud Deployment
 
 ### Exercise 3.1: Railway deployment
