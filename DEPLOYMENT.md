@@ -58,5 +58,6 @@ Các biến môi trường đã được cài đặt trên Railway:
 - Rate Limiting: ✅ 429 — Chặn từ request thứ 11 trở đi
 
 ## Screenshots
-- Bảng điều khiển Railway: App "Online" màu xanh lá
-- Kết quả test API thành công trên Terminal
+- [Deployment dashboard](screenshots/railway_dashboard.png) (Bảng điều khiển Railway: App "Online" màu xanh lá)
+- [Service running](screenshots/health_check.png) (Health check endpoint hoạt động tốt)
+- [Test results](screenshots/terminal_check.png) (Kết quả test API thành công trên Terminal)

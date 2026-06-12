@@ -45,7 +45,7 @@ Client → Nginx (port 80) → Agent (port 8000) → Redis (port 6379)
 
 ### Exercise 3.1: Railway deployment
 URL: https://day12-2a202600689-nguyenbinhhuy-production.up.railway.app
-Screenshot: In folder /screenshots
+Screenshot: Tham khảo trong tệp [DEPLOYMENT.md](DEPLOYMENT.md) hoặc thư mục [screenshots/](screenshots/) (bao gồm [railway_dashboard.png](screenshots/railway_dashboard.png), [health_check.png](screenshots/health_check.png), và [terminal_check.png](screenshots/terminal_check.png))
 ## Part 4: API Security
 
 ### Exercise 4.1-4.3: Test results
