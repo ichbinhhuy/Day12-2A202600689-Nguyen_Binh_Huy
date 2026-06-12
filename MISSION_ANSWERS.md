@@ -44,9 +44,8 @@ Client → Nginx (port 80) → Agent (port 8000) → Redis (port 6379)
 ## Part 3: Cloud Deployment
 
 ### Exercise 3.1: Railway deployment
-- URL: `https://agent-production.up.railway.app` (Đường dẫn mẫu)
-- Screenshot: Vui lòng tham khảo trong tệp `DEPLOYMENT.md` hoặc thư mục `screenshots/`.
-
+URL: https://day12-2a202600689-nguyenbinhhuy-production.up.railway.app
+Screenshot: In folder /screenshots
 ## Part 4: API Security
 
 ### Exercise 4.1-4.3: Test results
