@@ -28,6 +28,7 @@ from fastapi.security.api_key import APIKeyHeader
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import uvicorn
+import redis
 
 from app.config import settings
 
@@ -49,39 +50,50 @@ _request_count = 0
 _error_count = 0
 
 # ─────────────────────────────────────────────────────────
-# Simple In-memory Rate Limiter
+# Redis Connection
 # ─────────────────────────────────────────────────────────
-_rate_windows: dict[str, deque] = defaultdict(deque)
+r = redis.from_url(settings.redis_url)
 
+# ─────────────────────────────────────────────────────────
+# Stateless Rate Limiter (Redis)
+# ─────────────────────────────────────────────────────────
 def check_rate_limit(key: str):
     now = time.time()
-    window = _rate_windows[key]
-    while window and window[0] < now - 60:
-        window.popleft()
-    if len(window) >= settings.rate_limit_per_minute:
+    redis_key = f"rate:{key}"
+    
+    # Remove old entries
+    r.zremrangebyscore(redis_key, 0, now - 60)
+    
+    # Check limit
+    current = r.zcard(redis_key)
+    if current >= settings.rate_limit_per_minute:
         raise HTTPException(
             status_code=429,
             detail=f"Rate limit exceeded: {settings.rate_limit_per_minute} req/min",
             headers={"Retry-After": "60"},
         )
-    window.append(now)
+        
+    # Add new entry
+    r.zadd(redis_key, {str(now): now})
+    r.expire(redis_key, 60)
 
 # ─────────────────────────────────────────────────────────
-# Simple Cost Guard
+# Stateless Cost Guard (Redis)
 # ─────────────────────────────────────────────────────────
-_daily_cost = 0.0
-_cost_reset_day = time.strftime("%Y-%m-%d")
-
-def check_and_record_cost(input_tokens: int, output_tokens: int):
-    global _daily_cost, _cost_reset_day
+def check_and_record_cost(key: str, input_tokens: int, output_tokens: int):
     today = time.strftime("%Y-%m-%d")
-    if today != _cost_reset_day:
-        _daily_cost = 0.0
-        _cost_reset_day = today
-    if _daily_cost >= settings.daily_budget_usd:
-        raise HTTPException(503, "Daily budget exhausted. Try tomorrow.")
+    redis_key = f"budget:{key}:{today}"
+    
+    # Get current cost
+    current_cost = float(r.get(redis_key) or 0.0)
+    if current_cost >= settings.daily_budget_usd:
+        raise HTTPException(status_code=402, detail="Daily budget exhausted. Try tomorrow.")
+        
+    # Add new cost
     cost = (input_tokens / 1000) * 0.00015 + (output_tokens / 1000) * 0.0006
-    _daily_cost += cost
+    if cost > 0:
+        r.incrbyfloat(redis_key, cost)
+        r.expire(redis_key, 86400 * 2) # keep for 2 days
 
 # ─────────────────────────────────────────────────────────
 # Auth
@@ -145,7 +157,8 @@ async def request_middleware(request: Request, call_next):
         # Security headers
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
-        response.headers.pop("server", None)
+        if "server" in response.headers:
+            del response.headers["server"]
         duration = round((time.time() - start) * 1000, 1)
         logger.info(json.dumps({
             "event": "request",
@@ -206,7 +219,7 @@ async def ask_agent(
 
     # Budget check
     input_tokens = len(body.question.split()) * 2
-    check_and_record_cost(input_tokens, 0)
+    check_and_record_cost(_key[:8], input_tokens, 0)
 
     logger.info(json.dumps({
         "event": "agent_call",
@@ -217,7 +230,7 @@ async def ask_agent(
     answer = llm_ask(body.question)
 
     output_tokens = len(answer.split()) * 2
-    check_and_record_cost(0, output_tokens)
+    check_and_record_cost(_key[:8], 0, output_tokens)
 
     return AskResponse(
         question=body.question,
@@ -248,19 +261,25 @@ def ready():
     """Readiness probe. Load balancer stops routing here if not ready."""
     if not _is_ready:
         raise HTTPException(503, "Not ready")
+    try:
+        r.ping()
+    except Exception as e:
+        raise HTTPException(503, f"Redis not ready: {e}")
     return {"ready": True}
 
 
 @app.get("/metrics", tags=["Operations"])
 def metrics(_key: str = Depends(verify_api_key)):
     """Basic metrics (protected)."""
+    today = time.strftime("%Y-%m-%d")
+    daily_cost = float(r.get(f"budget:{_key[:8]}:{today}") or 0.0)
     return {
         "uptime_seconds": round(time.time() - START_TIME, 1),
         "total_requests": _request_count,
         "error_count": _error_count,
-        "daily_cost_usd": round(_daily_cost, 4),
+        "daily_cost_usd": round(daily_cost, 4),
         "daily_budget_usd": settings.daily_budget_usd,
-        "budget_used_pct": round(_daily_cost / settings.daily_budget_usd * 100, 1),
+        "budget_used_pct": round((daily_cost / settings.daily_budget_usd) * 100, 1) if settings.daily_budget_usd > 0 else 0,
     }
 
 
